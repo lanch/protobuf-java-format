@@ -36,14 +36,10 @@ import java.util.Locale;
 import java.util.Map;
 
 import com.google.protobuf.ByteString;
-import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.Message;
-import com.google.protobuf.Message.Builder;
 import com.google.protobuf.UnknownFieldSet;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
-import static com.googlecode.protobuf.format.util.TextUtils.*;
-
 
 /**
  * Provide ascii html formatting support for proto2 instances.
@@ -53,38 +49,26 @@ import static com.googlecode.protobuf.format.util.TextUtils.*;
  * @author eliran.bivas@gmail.com Eliran Bivas
  * @version $HtmlFormat.java Mar 12, 2009 4:00:33 PM$
  */
-public final class HtmlFormat extends AbstractCharBasedFormatter {
+public final class HtmlFormat {
 
     private static final String META_CONTENT = "<meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\" />";
     private static final String MAIN_DIV_STYLE = "color: black; font-size: 14px; font-family: sans-serif; font-weight: bolder; margin-bottom: 10px;";
     private static final String FIELD_NAME_STYLE = "font-weight: bold; color: #669966;font-size: 14px; font-family: sans-serif;";
     private static final String FIELD_VALUE_STYLE = "color: #3300FF;font-size: 13px; font-family: sans-serif;";
 
-    
-    public void print(final Message message, Appendable output) throws IOException {
-    	HtmlGenerator generator = new HtmlGenerator(output);
+    /**
+     * Outputs a textual representation of the Protocol Message supplied into the parameter output.
+     * (This representation is the new version of the classic "ProtocolPrinter" output from the
+     * original Protocol Buffer system)
+     */
+    public static void print(Message message, Appendable output) throws IOException {
+        HtmlGenerator generator = new HtmlGenerator(output);
         printTitle(message, generator);
         print(message, generator);
         generator.print("</body></html>");
     }
-    
-	public void print(final UnknownFieldSet fields, Appendable output) throws IOException {
-		HtmlGenerator generator = new HtmlGenerator(output);
-        generator.print("<html>");
-        generator.print(META_CONTENT);
-        generator.print("</head><body>");
-        printUnknownFields(fields, generator);
-        generator.print("</body></html>");
-	}
-	
-	@Override
-	public void merge(CharSequence input, ExtensionRegistry extensionRegistry,
-			Builder builder) throws IOException {
-		throw new UnsupportedOperationException();
-	}
-    
 
-    private void printTitle(final Message message, final HtmlGenerator generator) throws IOException {
+    private static void printTitle(final Message message, final HtmlGenerator generator) throws IOException {
         generator.print("<html><head>");
         generator.print(META_CONTENT);
         generator.print("<title>");
@@ -97,8 +81,47 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         generator.print("</div>");
     }
 
+    /**
+     * Outputs a textual representation of {@code fields} to {@code output}.
+     */
+    public static void print(UnknownFieldSet fields, Appendable output) throws IOException {
+        HtmlGenerator generator = new HtmlGenerator(output);
+        generator.print("<html>");
+        generator.print(META_CONTENT);
+        generator.print("</head><body>");
+        printUnknownFields(fields, generator);
+        generator.print("</body></html>");
+    }
 
-    private void print(Message message, HtmlGenerator generator) throws IOException {
+    /**
+     * Like {@code print()}, but writes directly to a {@code String} and returns it.
+     */
+    public static String printToString(Message message) {
+        try {
+            StringBuilder text = new StringBuilder();
+            print(message, text);
+            return text.toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Writing to a StringBuilder threw an IOException (should never happen).",
+                                       e);
+        }
+    }
+
+    /**
+     * Like {@code print()}, but writes directly to a {@code String} and returns it.
+     */
+    public static String printToString(UnknownFieldSet fields) {
+        try {
+            StringBuilder text = new StringBuilder();
+            print(fields, text);
+            return text.toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Writing to a StringBuilder threw an IOException (should never happen).",
+                                       e);
+        }
+    }
+
+    private static void print(Message message, HtmlGenerator generator) throws IOException {
 
         for (Map.Entry<FieldDescriptor, Object> field : message.getAllFields().entrySet()) {
             printField(field.getKey(), field.getValue(), generator);
@@ -106,7 +129,7 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         printUnknownFields(message.getUnknownFields(), generator);
     }
 
-    public void printField(FieldDescriptor field, Object value, HtmlGenerator generator) throws IOException {
+    public static void printField(FieldDescriptor field, Object value, HtmlGenerator generator) throws IOException {
 
         if (field.isRepeated()) {
             // Repeated field. Print each element.
@@ -118,7 +141,7 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         }
     }
 
-    private void printSingleField(FieldDescriptor field,
+    private static void printSingleField(FieldDescriptor field,
                                          Object value,
                                          HtmlGenerator generator) throws IOException {
         if (field.isExtension()) {
@@ -164,7 +187,7 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         generator.print("<br/>");
     }
 
-    private void printFieldValue(FieldDescriptor field, Object value, HtmlGenerator generator) throws IOException {
+    private static void printFieldValue(FieldDescriptor field, Object value, HtmlGenerator generator) throws IOException {
         generator.print("<span style=\"");
         generator.print(FIELD_VALUE_STYLE);
         generator.print("\">");
@@ -218,7 +241,7 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         generator.print("</span>");
     }
 
-    private void printUnknownFields(UnknownFieldSet unknownFields, HtmlGenerator generator) throws IOException {
+    private static void printUnknownFields(UnknownFieldSet unknownFields, HtmlGenerator generator) throws IOException {
         for (Map.Entry<Integer, UnknownFieldSet.Field> entry : unknownFields.asMap().entrySet()) {
             UnknownFieldSet.Field field = entry.getValue();
 
@@ -257,7 +280,29 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         }
     }
 
-    
+    /**
+     * Convert an unsigned 32-bit integer to a string.
+     */
+    private static String unsignedToString(int value) {
+        if (value >= 0) {
+            return Integer.toString(value);
+        } else {
+            return Long.toString((value) & 0x00000000FFFFFFFFL);
+        }
+    }
+
+    /**
+     * Convert an unsigned 64-bit integer to a string.
+     */
+    private static String unsignedToString(long value) {
+        if (value >= 0) {
+            return Long.toString(value);
+        } else {
+            // Pull off the most-significant bit so that BigInteger doesn't think
+            // the number is negative, then set it again using setBit().
+            return BigInteger.valueOf(value & 0x7FFFFFFFFFFFFFFFL).setBit(63).toString();
+        }
+    }
 
     /**
      * An inner class for writing text to the output stream.
@@ -276,7 +321,7 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
          * beginning of each line of text. Indent() may be called multiple times to produce deeper
          * indents.
          * 
-         * @throws IOException
+         * @throws java.io.IOException
          */
         public void indent() throws IOException {
             print("<div style=\"margin-left: 25px\">");
@@ -285,7 +330,7 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         /**
          * Reduces the current indent level by two spaces, or crashes if the indent level is zero.
          * 
-         * @throws IOException
+         * @throws java.io.IOException
          */
         public void outdent() throws IOException {
             print("</div>");
@@ -475,7 +520,7 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
     }
 
     /**
-     * Thrown by {@link JsonFormat#unescapeBytes} and {@link JsonFormat#unescapeText} when an
+     * Thrown by {@link com.googlecode.protobuf.format.JsonFormat#unescapeBytes} and {@link com.googlecode.protobuf.format.JsonFormat#unescapeText} when an
      * invalid escape sequence is seen.
      */
     static class InvalidEscapeSequence extends IOException {
@@ -504,6 +549,34 @@ public final class HtmlFormat extends AbstractCharBasedFormatter {
         return unescapeBytes(input).toStringUtf8();
     }
 
+    /**
+     * Is this an octal digit?
+     */
+    private static boolean isOctal(char c) {
+        return ('0' <= c) && (c <= '7');
+    }
+
+    /**
+     * Is this a hex digit?
+     */
+    private static boolean isHex(char c) {
+        return (('0' <= c) && (c <= '9')) || (('a' <= c) && (c <= 'f'))
+        || (('A' <= c) && (c <= 'F'));
+    }
+
+    /**
+     * Interpret a character as a digit (in any base up to 36) and return the numeric value. This is
+     * like {@code Character.digit()} but we don't accept non-ASCII digits.
+     */
+    private static int digitValue(char c) {
+        if (('0' <= c) && (c <= '9')) {
+            return c - '0';
+        } else if (('a' <= c) && (c <= 'z')) {
+            return c - 'a' + 10;
+        } else {
+            return c - 'A' + 10;
+        }
+    }
 
     /**
      * Parse a 32-bit signed integer from the text. Unlike the Java standard {@code

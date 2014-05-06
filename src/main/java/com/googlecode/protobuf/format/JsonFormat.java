@@ -1,18 +1,18 @@
 package com.googlecode.protobuf.format;
-/*
+/* 
 	Copyright (c) 2009, Orbitz World Wide
 	All rights reserved.
 
-	Redistribution and use in source and binary forms, with or without modification,
+	Redistribution and use in source and binary forms, with or without modification, 
 	are permitted provided that the following conditions are met:
 
-		* Redistributions of source code must retain the above copyright notice,
+		* Redistributions of source code must retain the above copyright notice, 
 		  this list of conditions and the following disclaimer.
-		* Redistributions in binary form must reproduce the above copyright notice,
-		  this list of conditions and the following disclaimer in the documentation
+		* Redistributions in binary form must reproduce the above copyright notice, 
+		  this list of conditions and the following disclaimer in the documentation 
 		  and/or other materials provided with the distribution.
-		* Neither the name of the Orbitz World Wide nor the names of its contributors
-		  may be used to endorse or promote products derived from this software
+		* Neither the name of the Orbitz World Wide nor the names of its contributors 
+		  may be used to endorse or promote products derived from this software 
 		  without specific prior written permission.
 
 	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -50,9 +50,6 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
-import com.googlecode.protobuf.format.util.TextUtils;
-
-import static com.googlecode.protobuf.format.util.TextUtils.*;
 
 /**
  * Provide ascii text parsing and formatting support for proto2 instances. The implementation
@@ -67,14 +64,14 @@ import static com.googlecode.protobuf.format.util.TextUtils.*;
  * @author wenboz@google.com Wenbo Zhu
  * @author kenton@google.com Kenton Varda
  */
-public class JsonFormat extends AbstractCharBasedFormatter {
+public class JsonFormat {
 
     /**
      * Outputs a textual representation of the Protocol Message supplied into the parameter output.
      * (This representation is the new version of the classic "ProtocolPrinter" output from the
      * original Protocol Buffer system)
      */
-	public void print(final Message message, Appendable output) throws IOException {
+    public static void print(Message message, Appendable output) throws IOException {
         JsonGenerator generator = new JsonGenerator(output);
         generator.print("{");
         print(message, generator);
@@ -84,16 +81,42 @@ public class JsonFormat extends AbstractCharBasedFormatter {
     /**
      * Outputs a textual representation of {@code fields} to {@code output}.
      */
-   	public void print(final UnknownFieldSet fields, Appendable output) throws IOException {
+    public static void print(UnknownFieldSet fields, Appendable output) throws IOException {
         JsonGenerator generator = new JsonGenerator(output);
         generator.print("{");
         printUnknownFields(fields, generator);
         generator.print("}");
     }
 
+    /**
+     * Like {@code print()}, but writes directly to a {@code String} and returns it.
+     */
+    public static String printToString(Message message) {
+        try {
+            StringBuilder text = new StringBuilder();
+            print(message, text);
+            return text.toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Writing to a StringBuilder threw an IOException (should never happen).",
+                                       e);
+        }
+    }
 
-    protected void print(Message message, JsonGenerator generator) throws IOException {
+    /**
+     * Like {@code print()}, but writes directly to a {@code String} and returns it.
+     */
+    public static String printToString(UnknownFieldSet fields) {
+        try {
+            StringBuilder text = new StringBuilder();
+            print(fields, text);
+            return text.toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Writing to a StringBuilder threw an IOException (should never happen).",
+                                       e);
+        }
+    }
 
+    protected static void print(Message message, JsonGenerator generator) throws IOException {
         for (Iterator<Map.Entry<FieldDescriptor, Object>> iter = message.getAllFields().entrySet().iterator(); iter.hasNext();) {
             Map.Entry<FieldDescriptor, Object> field = iter.next();
             printField(field.getKey(), field.getValue(), generator);
@@ -101,17 +124,20 @@ public class JsonFormat extends AbstractCharBasedFormatter {
                 generator.print(",");
             }
         }
-        if (message.getUnknownFields().asMap().size() > 0)
+
+        if (message.getAllFields().size() > 0 && message.getUnknownFields().asMap().size() > 0) {
             generator.print(", ");
+        }
+
         printUnknownFields(message.getUnknownFields(), generator);
     }
 
-    public void printField(FieldDescriptor field, Object value, JsonGenerator generator) throws IOException {
+    public static void printField(FieldDescriptor field, Object value, JsonGenerator generator) throws IOException {
 
         printSingleField(field, value, generator);
     }
 
-    private void printSingleField(FieldDescriptor field,
+    private static void printSingleField(FieldDescriptor field,
                                          Object value,
                                          JsonGenerator generator) throws IOException {
         if (field.isExtension()) {
@@ -165,7 +191,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
-    private void printFieldValue(FieldDescriptor field, Object value, JsonGenerator generator) throws IOException {
+    private static void printFieldValue(FieldDescriptor field, Object value, JsonGenerator generator) throws IOException {
         switch (field.getType()) {
             case INT32:
             case INT64:
@@ -219,7 +245,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
-    protected void printUnknownFields(UnknownFieldSet unknownFields, JsonGenerator generator) throws IOException {
+    protected static void printUnknownFields(UnknownFieldSet unknownFields, JsonGenerator generator) throws IOException {
         boolean firstField = true;
         for (Map.Entry<Integer, UnknownFieldSet.Field> entry : unknownFields.asMap().entrySet()) {
             UnknownFieldSet.Field field = entry.getValue();
@@ -266,8 +292,29 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
+    /**
+     * Convert an unsigned 32-bit integer to a string.
+     */
+    private static String unsignedToString(int value) {
+        if (value >= 0) {
+            return Integer.toString(value);
+        } else {
+            return Long.toString((value) & 0x00000000FFFFFFFFL);
+        }
+    }
 
-
+    /**
+     * Convert an unsigned 64-bit integer to a string.
+     */
+    private static String unsignedToString(long value) {
+        if (value >= 0) {
+            return Long.toString(value);
+        } else {
+            // Pull off the most-significant bit so that BigInteger doesn't think
+            // the number is negative, then set it again using setBit().
+            return BigInteger.valueOf(value & 0x7FFFFFFFFFFFFFFFL).setBit(63).toString();
+        }
+    }
 
     /**
      * An inner class for writing text to the output stream.
@@ -478,19 +525,12 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token exactly matches {@code token}, consume it. Otherwise, throw a
-         * {@link ParseException}.
+         * {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public void consume(String token) throws ParseException {
             if (!tryConsume(token)) {
                 throw parseException("Expected \"" + token + "\".");
             }
-        }
-
-        /**
-         * Returns {@code true} if the next token is an float, but does not consume it.
-         */
-        public boolean lookingAtFloat() {
-            return lookingAtInteger() && currentToken.contains(".");
         }
 
         /**
@@ -525,7 +565,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is an identifier, consume it and return its value. Otherwise, throw a
-         * {@link ParseException}.
+         * {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public String consumeIdentifier() throws ParseException {
             for (int i = 0; i < currentToken.length(); i++) {
@@ -547,7 +587,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a 32-bit signed integer, consume it and return its value. Otherwise,
-         * throw a {@link ParseException}.
+         * throw a {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public int consumeInt32() throws ParseException {
             try {
@@ -561,7 +601,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a 32-bit unsigned integer, consume it and return its value.
-         * Otherwise, throw a {@link ParseException}.
+         * Otherwise, throw a {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public int consumeUInt32() throws ParseException {
             try {
@@ -575,7 +615,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a 64-bit signed integer, consume it and return its value. Otherwise,
-         * throw a {@link ParseException}.
+         * throw a {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public long consumeInt64() throws ParseException {
             try {
@@ -589,7 +629,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a 64-bit unsigned integer, consume it and return its value.
-         * Otherwise, throw a {@link ParseException}.
+         * Otherwise, throw a {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public long consumeUInt64() throws ParseException {
             try {
@@ -603,7 +643,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a double, consume it and return its value. Otherwise, throw a
-         * {@link ParseException}.
+         * {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public double consumeDouble() throws ParseException {
             // We need to parse infinity and nan separately because
@@ -618,7 +658,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
                 return Double.NaN;
             }
             try {
-                double result = Double.parseDouble(prepareNumberFromString(currentToken));
+                double result = Double.parseDouble(currentToken);
                 nextToken();
                 return result;
             } catch (NumberFormatException e) {
@@ -628,7 +668,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a float, consume it and return its value. Otherwise, throw a
-         * {@link ParseException}.
+         * {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public float consumeFloat() throws ParseException {
             // We need to parse infinity and nan separately because
@@ -643,7 +683,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
                 return Float.NaN;
             }
             try {
-                float result = Float.parseFloat(prepareNumberFromString(currentToken));
+                float result = Float.parseFloat(currentToken);
                 nextToken();
                 return result;
             } catch (NumberFormatException e) {
@@ -653,7 +693,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a boolean, consume it and return its value. Otherwise, throw a
-         * {@link ParseException}.
+         * {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public boolean consumeBoolean() throws ParseException {
             if (currentToken.equals("true")) {
@@ -669,19 +709,12 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         /**
          * If the next token is a string, consume it and return its (unescaped) value. Otherwise,
-         * throw a {@link ParseException}.
+         * throw a {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public String consumeString() throws ParseException {
           char quote = currentToken.length() > 0 ? currentToken.charAt(0) : '\0';
           if ((quote != '\"') && (quote != '\'')) {
-              try {
-                String result = currentToken.replace(',', '.');
-                Double.parseDouble(result);
-                nextToken();
-                return result;
-              } catch (NumberFormatException e) {
-                throw parseException("Expected string.");
-              }
+              throw parseException("Expected string.");
           }
 
           if ((currentToken.length() < 2)
@@ -702,7 +735,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         /**
          * If the next token is a string, consume it, unescape it as a
          * {@link com.googlecode.protobuf.format.ByteString}, and return it. Otherwise, throw a
-         * {@link ParseException}.
+         * {@link com.googlecode.protobuf.format.JsonFormat.ParseException}.
          */
         public ByteString consumeByteString() throws ParseException {
             char quote = currentToken.length() > 0 ? currentToken.charAt(0) : '\0';
@@ -726,7 +759,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
 
         /**
-         * Returns a {@link ParseException} with the current line and column numbers in the
+         * Returns a {@link com.googlecode.protobuf.format.JsonFormat.ParseException} with the current line and column numbers in the
          * description, suitable for throwing.
          */
         public ParseException parseException(String description) {
@@ -735,7 +768,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
 
         /**
-         * Returns a {@link ParseException} with the line and column numbers of the previous token
+         * Returns a {@link com.googlecode.protobuf.format.JsonFormat.ParseException} with the line and column numbers of the previous token
          * in the description, suitable for throwing.
          */
         public ParseException parseExceptionPreviousToken(String description) {
@@ -745,7 +778,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
 
         /**
-         * Constructs an appropriate {@link ParseException} for the given {@code
+         * Constructs an appropriate {@link com.googlecode.protobuf.format.JsonFormat.ParseException} for the given {@code
          * NumberFormatException} when trying to parse an integer.
          */
         private ParseException integerParseException(NumberFormatException e) {
@@ -753,7 +786,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
 
         /**
-         * Constructs an appropriate {@link ParseException} for the given {@code
+         * Constructs an appropriate {@link com.googlecode.protobuf.format.JsonFormat.ParseException} for the given {@code
          * NumberFormatException} when trying to parse a float or double.
          */
         private ParseException floatParseException(NumberFormatException e) {
@@ -773,12 +806,61 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
+    /**
+     * Parse a text-format message from {@code input} and merge the contents into {@code builder}.
+     */
+    public static void merge(Readable input, Message.Builder builder) throws IOException {
+        merge(input, ExtensionRegistry.getEmptyRegistry(), builder);
+    }
+
+    /**
+     * Parse a text-format message from {@code input} and merge the contents into {@code builder}.
+     */
+    public static void merge(CharSequence input, Message.Builder builder) throws ParseException {
+        merge(input, ExtensionRegistry.getEmptyRegistry(), builder);
+    }
 
     /**
      * Parse a text-format message from {@code input} and merge the contents into {@code builder}.
      * Extensions will be recognized if they are registered in {@code extensionRegistry}.
      */
-    public void merge(CharSequence input,
+    public static void merge(Readable input,
+                             ExtensionRegistry extensionRegistry,
+                             Message.Builder builder) throws IOException {
+        // Read the entire input to a String then parse that.
+
+        // If StreamTokenizer were not quite so crippled, or if there were a kind
+        // of Reader that could read in chunks that match some particular regex,
+        // or if we wanted to write a custom Reader to tokenize our stream, then
+        // we would not have to read to one big String. Alas, none of these is
+        // the case. Oh well.
+
+        merge(toStringBuilder(input), extensionRegistry, builder);
+    }
+
+    private static final int BUFFER_SIZE = 4096;
+
+    // TODO(chrisn): See if working around java.io.Reader#read(CharBuffer)
+    // overhead is worthwhile
+    protected static StringBuilder toStringBuilder(Readable input) throws IOException {
+        StringBuilder text = new StringBuilder();
+        CharBuffer buffer = CharBuffer.allocate(BUFFER_SIZE);
+        while (true) {
+            int n = input.read(buffer);
+            if (n == -1) {
+                break;
+            }
+            buffer.flip();
+            text.append(buffer, 0, n);
+        }
+        return text;
+    }
+
+    /**
+     * Parse a text-format message from {@code input} and merge the contents into {@code builder}.
+     * Extensions will be recognized if they are registered in {@code extensionRegistry}.
+     */
+    public static void merge(CharSequence input,
                              ExtensionRegistry extensionRegistry,
                              Message.Builder builder) throws ParseException {
         Tokenizer tokenizer = new Tokenizer(input);
@@ -795,12 +877,15 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
+    private static final Pattern DIGITS = Pattern.compile(
+          "[0-9]",
+          Pattern.CASE_INSENSITIVE);
 
     /**
      * Parse a single field from {@code tokenizer} and merge it into {@code builder}. If a ',' is
      * detected after the field ends, the next field will be parsed automatically
      */
-    protected void mergeField(Tokenizer tokenizer,
+    protected static void mergeField(Tokenizer tokenizer,
                                    ExtensionRegistry extensionRegistry,
                                    Message.Builder builder) throws ParseException {
         FieldDescriptor field;
@@ -832,11 +917,11 @@ public class JsonFormat extends AbstractCharBasedFormatter {
 
         // Last try to lookup by field-index if 'name' is numeric,
         // which indicates a possible unknown field
-        if (field == null && TextUtils.isDigits(name)) {
+        if (field == null && DIGITS.matcher(name).matches()) {
             field = type.findFieldByNumber(Integer.parseInt(name));
             unknown = true;
         }
-
+        
         // Finally, look for extensions
         extension = extensionRegistry.findExtensionByName(name);
         if (extension != null) {
@@ -876,7 +961,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
-    private void handleMissingField(Tokenizer tokenizer,
+    private static void handleMissingField(Tokenizer tokenizer,
                                            ExtensionRegistry extensionRegistry,
                                            Message.Builder builder) throws ParseException {
         tokenizer.tryConsume(":");
@@ -899,8 +984,6 @@ public class JsonFormat extends AbstractCharBasedFormatter {
             // Primitive value
             if ("null".equals(tokenizer.currentToken())) {
                 tokenizer.consume("null");
-            } else if (tokenizer.lookingAtFloat()) {
-                tokenizer.consumeFloat();
             } else if (tokenizer.lookingAtInteger()) {
                 tokenizer.consumeInt64();
             } else if (tokenizer.lookingAtBoolean()) {
@@ -911,7 +994,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
-    private void handleValue(Tokenizer tokenizer,
+    private static void handleValue(Tokenizer tokenizer,
                                     ExtensionRegistry extensionRegistry,
                                     Message.Builder builder,
                                     FieldDescriptor field,
@@ -933,7 +1016,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
     }
 
-    private Object handlePrimitive(Tokenizer tokenizer, FieldDescriptor field) throws ParseException {
+    private static Object handlePrimitive(Tokenizer tokenizer, FieldDescriptor field) throws ParseException {
         Object value = null;
         if ("null".equals(tokenizer.currentToken())) {
             tokenizer.consume("null");
@@ -1015,7 +1098,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         return value;
     }
 
-    private Object handleObject(Tokenizer tokenizer,
+    private static Object handleObject(Tokenizer tokenizer,
                                        ExtensionRegistry extensionRegistry,
                                        Message.Builder builder,
                                        FieldDescriptor field,
@@ -1117,7 +1200,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
         return builder.toString();
     }
-
+	
 	static String unicodeEscaped(char ch) {
 		if (ch < 0x10) {
 			return "\\u000" + Integer.toHexString(ch);
@@ -1230,7 +1313,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
     }
 
     /**
-     * Thrown by {@link JsonFormat#unescapeBytes} and {@link JsonFormat#unescapeText} when an
+     * Thrown by {@link com.googlecode.protobuf.format.JsonFormat#unescapeBytes} and {@link com.googlecode.protobuf.format.JsonFormat#unescapeText} when an
      * invalid escape sequence is seen.
      */
     static class InvalidEscapeSequence extends IOException {
@@ -1245,7 +1328,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
     /**
      * Implements JSON string escaping as specified <a href="http://www.ietf.org/rfc/rfc4627.txt">here</a>.
      * <ul>
-     *  <li>The following characters are escaped by prefixing them with a '\' : \b,\f,\n,\r,\t,\,"</li>
+     *  <li>The following characters are escaped by prefixing them with a '\' : \b,\f,\n,\r,\t,\,"</li> 
      *  <li>Other control characters in the range 0x0000-0x001F are escaped using the \\uXXXX notation</li>
      *  <li>UTF-16 surrogate pairs are encoded using the \\uXXXX\\uXXXX notation</li>
      *  <li>any other character is printed as-is</li>
@@ -1372,6 +1455,34 @@ public class JsonFormat extends AbstractCharBasedFormatter {
       return builder.toString();
     }
 
+    /**
+     * Is this an octal digit?
+     */
+    private static boolean isOctal(char c) {
+        return ('0' <= c) && (c <= '7');
+    }
+
+    /**
+     * Is this a hex digit?
+     */
+    private static boolean isHex(char c) {
+        return (('0' <= c) && (c <= '9')) || (('a' <= c) && (c <= 'f'))
+               || (('A' <= c) && (c <= 'F'));
+    }
+
+    /**
+     * Interpret a character as a digit (in any base up to 36) and return the numeric value. This is
+     * like {@code Character.digit()} but we don't accept non-ASCII digits.
+     */
+    private static int digitValue(char c) {
+        if (('0' <= c) && (c <= '9')) {
+            return c - '0';
+        } else if (('a' <= c) && (c <= 'z')) {
+            return c - 'a' + 10;
+        } else {
+            return c - 'A' + 10;
+        }
+    }
 
     /**
      * Parse a 32-bit signed integer from the text. Unlike the Java standard {@code
@@ -1431,7 +1542,7 @@ public class JsonFormat extends AbstractCharBasedFormatter {
             radix = 8;
         }
 
-        String numberText = prepareNumberFromString(text.substring(pos));
+        String numberText = text.substring(pos);
 
         long result = 0;
         if (numberText.length() < 16) {
@@ -1494,20 +1605,5 @@ public class JsonFormat extends AbstractCharBasedFormatter {
         }
 
         return result;
-    }
-
-    /**
-     * Accept "" empty string
-     * and number in quote "6" as number
-     */
-    private static String prepareNumberFromString(String numberText) {
-
-        numberText = numberText.replaceAll("\"", "");
-
-        if (numberText.equals("")) {
-            numberText = "0"; // default value
-        }
-
-        return numberText;
     }
 }

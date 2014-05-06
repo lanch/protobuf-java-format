@@ -12,7 +12,6 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.Message;
 import com.google.protobuf.UnknownFieldSet;
-import static com.googlecode.protobuf.format.util.TextUtils.*;
 
 /**
  * Provide ascii text parsing and formatting support for proto2 instances. The implementation
@@ -26,28 +25,62 @@ import static com.googlecode.protobuf.format.util.TextUtils.*;
  * @author wenboz@google.com Wenbo Zhu
  * @author kenton@google.com Kenton Varda
  */
-public class JavaPropsFormat extends AbstractCharBasedFormatter {
+public class JavaPropsFormat {
+  private JavaPropsFormat() {
+  }
 
-	/**
-	 * Outputs a textual representation of the Protocol Message supplied into
-	 * the parameter output. (This representation is the new version of the
-	 * classic "ProtocolPrinter" output from the original Protocol Buffer system)
-	 */
-	public void print(final Message message, Appendable output) throws IOException {
-		final JavaPropsGenerator generator = new JavaPropsGenerator(output);
-	    print(message, generator);	
-	}
-	
+  /**
+   * Outputs a textual representation of the Protocol Message supplied into
+   * the parameter output. (This representation is the new version of the
+   * classic "ProtocolPrinter" output from the original Protocol Buffer system)
+   */
+  public static void print(final Message message, final Appendable output)
+                           throws IOException {
+    final JavaPropsGenerator generator = new JavaPropsGenerator(output);
+    print(message, generator);
+  }
 
   /** Outputs a textual representation of {@code fields} to {@code output}. */
-	public void print(final UnknownFieldSet fields, Appendable output) throws IOException {
-		final JavaPropsGenerator generator = new JavaPropsGenerator(output);
-	    printUnknownFields(fields, generator);
-	}
-  
+  public static void print(final UnknownFieldSet fields,
+                           final Appendable output)
+                           throws IOException {
+    final JavaPropsGenerator generator = new JavaPropsGenerator(output);
+    printUnknownFields(fields, generator);
+  }
 
-  
-  private void print(final Message message,
+  /**
+   * Like {@code print()}, but writes directly to a {@code String} and
+   * returns it.
+   */
+  public static String printToString(final Message message) {
+    try {
+      final StringBuilder text = new StringBuilder();
+      print(message, text);
+      return text.toString();
+    } catch (IOException e) {
+      throw new RuntimeException(
+        "Writing to a StringBuilder threw an IOException (should never " +
+        "happen).", e);
+    }
+  }
+
+  /**
+   * Like {@code print()}, but writes directly to a {@code String} and
+   * returns it.
+   */
+  public static String printToString(final UnknownFieldSet fields) {
+    try {
+      final StringBuilder text = new StringBuilder();
+      print(fields, text);
+      return text.toString();
+    } catch (IOException e) {
+      throw new RuntimeException(
+        "Writing to a StringBuilder threw an IOException (should never " +
+        "happen).", e);
+    }
+  }
+
+  private static void print(final Message message,
                             final JavaPropsGenerator generator)
       throws IOException {
     for (final Map.Entry<Descriptors.FieldDescriptor, Object> field :
@@ -57,7 +90,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     printUnknownFields(message.getUnknownFields(), generator);
   }
 
-  public void printField(final Descriptors.FieldDescriptor field,
+  public static void printField(final Descriptors.FieldDescriptor field,
                                 final Object value,
                                 final Appendable output)
                                 throws IOException {
@@ -65,7 +98,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     printField(field, value, generator);
   }
 
-  public String printFieldToString(final Descriptors.FieldDescriptor field,
+  public static String printFieldToString(final Descriptors.FieldDescriptor field,
                                           final Object value) {
     try {
       final StringBuilder text = new StringBuilder();
@@ -78,7 +111,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
   }
 
-  private void printField(final Descriptors.FieldDescriptor field,
+  private static void printField(final Descriptors.FieldDescriptor field,
                                 final Object value,
                                 final JavaPropsGenerator generator)
                                 throws IOException {
@@ -93,7 +126,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
   }
 
-  private void printSingleField(final Descriptors.FieldDescriptor field,
+  private static void printSingleField(final Descriptors.FieldDescriptor field,
                                        final Object value, final Integer collectionIndex,
                                        final JavaPropsGenerator generator)
                                        throws IOException {
@@ -141,7 +174,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
   }
 
-  private String createFieldNameCollectionIndex(final String fieldName,
+  private static String createFieldNameCollectionIndex(final String fieldName,
                                                        final Integer collectionIndex)
                                                        throws IOException{
     if (collectionIndex != null) {
@@ -151,7 +184,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
   }
 
-  private void printFieldValue(final Descriptors.FieldDescriptor field,
+  private static void printFieldValue(final Descriptors.FieldDescriptor field,
                                       final Object value,
                                       final JavaPropsGenerator generator)
                                       throws IOException {
@@ -202,7 +235,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
   }
 
-  private void printUnknownFields(final UnknownFieldSet unknownFields,
+  private static void printUnknownFields(final UnknownFieldSet unknownFields,
                                          final JavaPropsGenerator generator)
                                          throws IOException {
     for (final Map.Entry<Integer, UnknownFieldSet.Field> entry :
@@ -245,8 +278,26 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
   }
 
-  
-  
+  /** Convert an unsigned 32-bit integer to a string. */
+  private static String unsignedToString(final int value) {
+    if (value >= 0) {
+      return Integer.toString(value);
+    } else {
+      return Long.toString(((long) value) & 0x00000000FFFFFFFFL);
+    }
+  }
+
+  /** Convert an unsigned 64-bit integer to a string. */
+  private static String unsignedToString(final long value) {
+    if (value >= 0) {
+      return Long.toString(value);
+    } else {
+      // Pull off the most-significant bit so that BigInteger doesn't think
+      // the number is negative, then set it again using setBit().
+      return BigInteger.valueOf(value & 0x7FFFFFFFFFFFFFFFL)
+                       .setBit(63).toString();
+    }
+  }
 
   /**
    * An inner class for writing text to the output stream.
@@ -458,7 +509,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token exactly matches {@code token}, consume it.  Otherwise,
-     * throw a {@link ParseException}.
+     * throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public void consume(final String token) throws ParseException {
       if (!tryConsume(token)) {
@@ -482,7 +533,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is an identifier, consume it and return its value.
-     * Otherwise, throw a {@link ParseException}.
+     * Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public String consumeIdentifier() throws ParseException {
       for (int i = 0; i < currentToken.length(); i++) {
@@ -505,7 +556,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a 32-bit signed integer, consume it and return its
-     * value.  Otherwise, throw a {@link ParseException}.
+     * value.  Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public int consumeInt32() throws ParseException {
       try {
@@ -519,7 +570,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a 32-bit unsigned integer, consume it and return its
-     * value.  Otherwise, throw a {@link ParseException}.
+     * value.  Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public int consumeUInt32() throws ParseException {
       try {
@@ -533,7 +584,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a 64-bit signed integer, consume it and return its
-     * value.  Otherwise, throw a {@link ParseException}.
+     * value.  Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public long consumeInt64() throws ParseException {
       try {
@@ -547,7 +598,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a 64-bit unsigned integer, consume it and return its
-     * value.  Otherwise, throw a {@link ParseException}.
+     * value.  Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public long consumeUInt64() throws ParseException {
       try {
@@ -561,7 +612,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a double, consume it and return its value.
-     * Otherwise, throw a {@link ParseException}.
+     * Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public double consumeDouble() throws ParseException {
       // We need to parse infinity and nan separately because
@@ -586,7 +637,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a float, consume it and return its value.
-     * Otherwise, throw a {@link ParseException}.
+     * Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public float consumeFloat() throws ParseException {
       // We need to parse infinity and nan separately because
@@ -611,7 +662,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a boolean, consume it and return its value.
-     * Otherwise, throw a {@link ParseException}.
+     * Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public boolean consumeBoolean() throws ParseException {
       if (currentToken.equals("true")) {
@@ -627,7 +678,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a string, consume it and return its (unescaped)
-     * value.  Otherwise, throw a {@link ParseException}.
+     * value.  Otherwise, throw a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public String consumeString() throws ParseException {
       return consumeByteString().toStringUtf8();
@@ -635,8 +686,8 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
     /**
      * If the next token is a string, consume it, unescape it as a
-     * {@link ByteString}, and return it.  Otherwise, throw a
-     * {@link ParseException}.
+     * {@link com.google.protobuf.ByteString}, and return it.  Otherwise, throw a
+     * {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException}.
      */
     public ByteString consumeByteString() throws ParseException {
       List<ByteString> list = new ArrayList<ByteString>();
@@ -677,7 +728,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
 
     /**
-     * Returns a {@link ParseException} with the current line and column
+     * Returns a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException} with the current line and column
      * numbers in the description, suitable for throwing.
      */
     public ParseException parseException(final String description) {
@@ -687,7 +738,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
 
     /**
-     * Returns a {@link ParseException} with the line and column numbers of
+     * Returns a {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException} with the line and column numbers of
      * the previous token in the description, suitable for throwing.
      */
     public ParseException parseExceptionPreviousToken(
@@ -698,7 +749,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
 
     /**
-     * Constructs an appropriate {@link ParseException} for the given
+     * Constructs an appropriate {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException} for the given
      * {@code NumberFormatException} when trying to parse an integer.
      */
     private ParseException integerParseException(
@@ -707,7 +758,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
 
     /**
-     * Constructs an appropriate {@link ParseException} for the given
+     * Constructs an appropriate {@link com.googlecode.protobuf.format.JavaPropsFormat.ParseException} for the given
      * {@code NumberFormatException} when trying to parse a float or double.
      */
     private ParseException floatParseException(final NumberFormatException e) {
@@ -724,14 +775,71 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     }
   }
 
-  
+  /**
+   * Parse a text-format message from {@code input} and merge the contents
+   * into {@code builder}.
+   */
+  public static void merge(final Readable input,
+                           final Message.Builder builder)
+                           throws IOException {
+    merge(input, ExtensionRegistry.getEmptyRegistry(), builder);
+  }
+
+  /**
+   * Parse a text-format message from {@code input} and merge the contents
+   * into {@code builder}.
+   */
+  public static void merge(final CharSequence input,
+                           final Message.Builder builder)
+                           throws ParseException {
+    merge(input, ExtensionRegistry.getEmptyRegistry(), builder);
+  }
 
   /**
    * Parse a text-format message from {@code input} and merge the contents
    * into {@code builder}.  Extensions will be recognized if they are
    * registered in {@code extensionRegistry}.
    */
-  public void merge(final CharSequence input,
+  public static void merge(final Readable input,
+                           final ExtensionRegistry extensionRegistry,
+                           final Message.Builder builder)
+                           throws IOException {
+    // Read the entire input to a String then parse that.
+
+    // If StreamTokenizer were not quite so crippled, or if there were a kind
+    // of Reader that could read in chunks that match some particular regex,
+    // or if we wanted to write a custom Reader to tokenize our stream, then
+    // we would not have to read to one big String.  Alas, none of these is
+    // the case.  Oh well.
+
+    merge(toStringBuilder(input), extensionRegistry, builder);
+  }
+
+  private static final int BUFFER_SIZE = 4096;
+
+  // TODO(chrisn): See if working around java.io.Reader#read(CharBuffer)
+  // overhead is worthwhile
+  private static StringBuilder toStringBuilder(final Readable input)
+      throws IOException {
+    final StringBuilder text = new StringBuilder();
+    final CharBuffer buffer = CharBuffer.allocate(BUFFER_SIZE);
+    while (true) {
+      final int n = input.read(buffer);
+      if (n == -1) {
+        break;
+      }
+      buffer.flip();
+      text.append(buffer, 0, n);
+    }
+    return text;
+  }
+
+  /**
+   * Parse a text-format message from {@code input} and merge the contents
+   * into {@code builder}.  Extensions will be recognized if they are
+   * registered in {@code extensionRegistry}.
+   */
+  public static void merge(final CharSequence input,
                            final ExtensionRegistry extensionRegistry,
                            final Message.Builder builder)
                            throws ParseException {
@@ -747,7 +855,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
    * Parse a single field from {@code tokenizer} and merge it into
    * {@code builder}.
    */
-  private void mergeField(final Tokenizer tokenizer,
+  private static void mergeField(final Tokenizer tokenizer,
                                  final ExtensionRegistry extensionRegistry,
                                  final Map<String, Message> subMessages,
                                  final Message.Builder builder)
@@ -975,7 +1083,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
 
   /**
    * Un-escape a byte sequence as escaped using
-   * {@link #escapeBytes(ByteString)}.  Two-digit hex escapes (starting with
+   * {@link #escapeBytes(com.google.protobuf.ByteString)}.  Two-digit hex escapes (starting with
    * "\x") are also recognized.
    */
   static ByteString unescapeBytes(final CharSequence input)
@@ -1048,8 +1156,8 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
   }
 
   /**
-   * Thrown by {@link JavaPropsFormat#unescapeBytes(CharSequence)} and
-   * {@link JavaPropsFormat#unescapeText(String)} when an invalid escape sequence is seen.
+   * Thrown by {@link com.googlecode.protobuf.format.JavaPropsFormat#unescapeBytes(CharSequence)} and
+   * {@link com.googlecode.protobuf.format.JavaPropsFormat#unescapeText(String)} when an invalid escape sequence is seen.
    */
   static class InvalidEscapeSequenceException extends IOException {
     private static final long serialVersionUID = -8164033650142593304L;
@@ -1060,7 +1168,7 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
   }
 
   /**
-   * Like {@link #escapeBytes(ByteString)}, but escapes a text string.
+   * Like {@link #escapeBytes(com.google.protobuf.ByteString)}, but escapes a text string.
    * Non-ASCII characters are first encoded as UTF-8, then each byte is escaped
    * individually as a 3-digit octal escape.  Yes, it's weird.
    */
@@ -1077,7 +1185,32 @@ public class JavaPropsFormat extends AbstractCharBasedFormatter {
     return unescapeBytes(input).toStringUtf8();
   }
 
-  
+  /** Is this an octal digit? */
+  private static boolean isOctal(final char c) {
+    return '0' <= c && c <= '7';
+  }
+
+  /** Is this a hex digit? */
+  private static boolean isHex(final char c) {
+    return ('0' <= c && c <= '9') ||
+           ('a' <= c && c <= 'f') ||
+           ('A' <= c && c <= 'F');
+  }
+
+  /**
+   * Interpret a character as a digit (in any base up to 36) and return the
+   * numeric value.  This is like {@code Character.digit()} but we don't accept
+   * non-ASCII digits.
+   */
+  private static int digitValue(final char c) {
+    if ('0' <= c && c <= '9') {
+      return c - '0';
+    } else if ('a' <= c && c <= 'z') {
+      return c - 'a' + 10;
+    } else {
+      return c - 'A' + 10;
+    }
+  }
 
   /**
    * Parse a 32-bit signed integer from the text.  Unlike the Java standard

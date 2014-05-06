@@ -1,0 +1,12 @@
+package unknown;
+
+message Site {
+    optional string name = 1;
+    optional string url = 2;
+}
+
+message Mo {
+    optional string name = 1;
+    optional int64 id = 2;
+    optional Site site = 3;
+}
